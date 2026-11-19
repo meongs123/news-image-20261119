@@ -9,15 +9,23 @@ file's own Fed-minutes fallback applied (minutes were released 18 Nov, so the
 Fed item moved to DATE CHECK and Liu Yunping was promoted to lead 13; a
 verified 19-Nov brief, Coalition of the Willing meets in Berlin, fills #21).
 
-Type scale (better-typography: 3 faces, size by role, no light weights):
-  masthead  Noto Serif Display Condensed Bold, ~76px, lh 1.05
-  headlines Noto Sans Condensed Bold, 46px big cards / 27px small cards
-  decks     Noto Sans Condensed, 26px big / 19px small
-  labels    Noto Sans Condensed Bold, 12-14px, uppercase
-  briefs    Noto Sans Condensed Bold 22px lead-in / 19px body
-  footer    Noto Sans Condensed 13px
+Type scale (better-typography: 3 faces, size by role, no light weights).
+MEASURED from the reference (ronigrv rank-1, 18 Nov, 1024 canvas) by glyph
+measurement, not guessed: masthead cap 41px; big headlines cap 14px in 335px
+cards (ratio .042), decks cap 9px; small headlines cap 11px in 193px cards,
+decks cap 7px; briefs cap 7px; region bar 16px, field bar 17px; big-card
+illustration 63% of card height, small-card 54%. Our sizes below are set so
+the RENDERED CAP HEIGHTS match those numbers (Noto cap/em ~0.72):
+  masthead  DejaVu Serif Bold 56px (cap 41, spans ~930px like the reference)
+  headlines Noto Sans Condensed Bold, 19px big cards / 15px small cards
+  decks     Noto Sans Condensed, 12px big / 10px small
+  labels    Noto Sans Condensed Bold, 10px big / 9px small, uppercase
+  briefs    Noto Sans Condensed Bold 11px lead-in / 10px body
+  footer    Noto Sans Condensed 12px
 Layout (better-layout): 12px shared margins, 8px gaps between card groups,
 4px gaps inside cards, one card style, square corners (newsprint).
+Card geometry mirrors the reference: big cards y154 h212, small rows y372 /
+y527 h149, bottom headers y685, map 300x148, DATE CHECK y966, footer y1010.
 Colour (better-colors): one hue per region, red only for badges/emphasis;
 text on gold/orange segments is black (measured contrast), white elsewhere.
 """
@@ -61,6 +69,7 @@ FD = "/usr/share/fonts/truetype/noto"
 SERIFD = os.path.join(FD, "NotoSerifDisplay-CondensedBold.ttf")
 SANSB  = os.path.join(FD, "NotoSans-CondensedBold.ttf")
 SANS   = os.path.join(FD, "NotoSans-Condensed.ttf")
+DEJAVU_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
 
 
 def font(path, size):
@@ -518,52 +527,82 @@ FOOTER = ("Every story here happened or was first reported on Thursday 19 Novemb
 
 
 # ---------------------------------------------------------------- layout
+def balance2(text, f, max_w):
+    """Split text into 2 balanced lines (reference headlines are all 2 lines).
+    Picks the split point minimising the widest line; falls back to greedy wrap."""
+    words = text.split()
+    if len(words) < 2:
+        return [text]
+    best = None
+    for i in range(1, len(words)):
+        a, b = " ".join(words[:i]), " ".join(words[i:])
+        if f.getlength(a) <= max_w and f.getlength(b) <= max_w:
+            w = max(f.getlength(a), f.getlength(b))
+            if best is None or w < best[0]:
+                best = (w, [a, b])
+    return best[1] if best else wrap(text, f, max_w, 2)
+
+
 def draw_card(d, card, x, y, w, h, big):
     d.rectangle([x, y, x + w, y + h], fill=CARD, outline=INK, width=1)
-    ill_h = 84 if big else 70
+    # illustration (reference: 63% of card height big, 54% small)
+    ill_h = 124 if big else 78
     card["ill"](d, x + 1, y + 1, w - 2, ill_h)
     # number badge (red = emphasis only, better-colors: one meaning)
-    bs = 26 if big else 22
+    # reference: ~20px big, ~18px small
+    bs = 20 if big else 18
     d.rectangle([x + 1, y + 1, x + 1 + bs, y + 1 + bs], fill=RED)
-    bf = font(SANSB, 18 if big else 15)
+    bf = font(SANSB, 13 if big else 12)
     d.text((x + 1 + bs / 2, y + 1 + bs / 2), str(card["n"]), font=bf,
            fill=(255, 255, 255), anchor="mm")
-    # region tag pill
+    # region tag pill (reference: pill ~13px, text cap ~7px)
     col = REGIONS[card["region"]]
     tx, ty = x + 8, y + ill_h + 5
     tag = f"{card['region']} · {card['field']}"
-    tf = font(SANSB, 13 if big else 11)
+    tf = font(SANSB, 10 if big else 9)
     tw = tf.getlength(tag)
-    th = 18 if big else 16
+    th = 13 if big else 12
     d.rectangle([tx, ty, tx + tw + 10, ty + th], fill=col)
     d.text((tx + 5, ty + th / 2), tag, font=tf, fill=REGION_TEXT[card["region"]],
            anchor="lm")
-    # headline (balanced 2-line wrap, better-typography). Placement is measured
-    # from the fonts' real ink boxes (PIL anchor "la" + Noto's 50/14 ascent/
-    # descent at 46px), not from nominal sizes, so deck can never touch it.
+    # headline: 2 balanced lines (reference headlines are all 2 lines).
+    # Placement is measured from the fonts' real ink boxes (cap-top 5px below
+    # the tag), not from nominal sizes, so the deck can never touch it.
     hx = x + 8
     hw = w - 16
-    hy = ty + th + 4
-    hsize = 46 if big else 25
+    hsize = 19 if big else 15
     hf = font(SANSB, hsize)
-    lh = 47 if big else 26
-    lines = wrap(card["headline"], hf, hw, 2)
+    lh = 21 if big else 16
+    ascent, descent = hf.getmetrics()
+    cap = hf.getbbox("H")[3] - hf.getbbox("H")[1]
+    hy = ty + th + 5 - (ascent - cap)
+    lines = balance2(card["headline"], hf, hw)
     if any("…" in ln for ln in lines):
         print(f"  WARNING truncated headline card {card['n']}: {card['headline']!r}")
     for i, line in enumerate(lines):
         d.text((hx, hy + i * lh), line, font=hf, fill=INK)
-    head_bottom = max(hy + i * lh + hf.getbbox(ln)[3] for i, ln in enumerate(lines))
-    # deck, one line: below the headline ink with a 4px gap, ink bottom 4px
-    # above the card edge; shrink the deck font if it cannot fit both.
-    dsize = 26 if big else 19
-    while dsize >= (22 if big else 16):
+    head_ink_bottom = (hy + (len(lines) - 1) * lh + ascent
+                       + (descent if any(c in "gjpqy" for ln in lines for c in ln) else 0))
+    # deck, one line: bottom-anchored, ink bottom 4px above the card edge,
+    # with at least a 2px gap below the headline ink; shrink if it cannot fit.
+    dsize = 12 if big else 10
+    df = font(SANS, dsize)
+    while dsize > (10 if big else 8):
         df = font(SANS, dsize)
-        db = df.getbbox(card["deck"])
-        dy = max(head_bottom + 4 - db[1], y + h - 4 - db[3])
-        if dy + db[3] <= y + h - 2:
+        dasc, ddesc = df.getmetrics()
+        deff = ddesc if any(c in "gjpqy" for c in card["deck"]) else 0
+        dy = (y + h - 4) - (dasc + deff)
+        # compare INK to ink: the deck's ink starts (ascent - cap) below its
+        # anchor, so a 2px ink gap is dy + (dasc - cap) - head_ink_bottom
+        dcap = df.getbbox("H")[3] - df.getbbox("H")[1]
+        if dy + (dasc - dcap) - head_ink_bottom >= 2:
             break
         dsize -= 1
-    if dsize < (26 if big else 19):
+    df = font(SANS, dsize)
+    dasc, ddesc = df.getmetrics()
+    deff = ddesc if any(c in "gjpqy" for c in card["deck"]) else 0
+    dy = (y + h - 4) - (dasc + deff)
+    if dsize < (12 if big else 10):
         print(f"  deck shrunk card {card['n']} to {dsize}px")
     if df.getlength(card["deck"]) > hw:
         print(f"  WARNING deck overflow card {card['n']}: {card['deck']!r}")
@@ -647,45 +686,55 @@ def main():
     log = []
 
     # top red rule + strip (better-layout: shared 12px edges)
+    # reference: strip text cap ~8px -> 11px; right half RED
     d.rectangle([0, 0, W, 5], fill=RED)
-    sf = font(SANSB, 14)
+    sf = font(SANSB, 11)
     d.text((M, 9), "THE WORLD\u2019S NEWS IN ONE PICTURE", font=sf, fill=INK)
     right = "21 STORIES \u00b7 6 REGIONS \u00b7 8 FIELDS \u00b7 13 ILLUSTRATED \u00b7 ALL FROM THURSDAY"
-    d.text((W - M, 9), right, font=sf, fill=INK, anchor="ra")
+    d.text((W - M, 9), right, font=sf, fill=RED, anchor="ra")
 
-    # masthead: serif display, fitted to the content width
-    mf, msize = fit_font(SERIFD, "Thursday 19 November 2026", CW, 76)
+    # masthead: serif, fitted to the content width, ink-top at y=40
+    # (reference: cap height 41px; DejaVu Serif Bold 56px gives cap ~41 and
+    # spans ~930px, closest metric match of the candidates measured)
+    mf, msize = fit_font(DEJAVU_BOLD, "Thursday 19 November 2026", CW, 56)
     log.append(f"masthead size {msize}")
-    d.text((W // 2, 30), "Thursday 19 November 2026", font=mf, fill=INK, anchor="ma")
+    bb = d.textbbox((W // 2, 0), "Thursday 19 November 2026", font=mf, anchor="ma")
+    d.text((W // 2, 40 - bb[1]), "Thursday 19 November 2026", font=mf,
+           fill=INK, anchor="ma")
+    # double rule under the masthead (reference: full-width rules at y=92, 94)
+    d.line([M, 92, M + CW, 92], fill=INK, width=1)
+    d.line([M, 94, M + CW, 94], fill=INK, width=1)
 
     # region bar: 6 equal segments, counts = region totals
-    ry, rh = 106, 24
+    # reference: y=98, height 16px
+    ry, rh = 98, 16
     seg = CW / 6
-    rf = font(SANSB, 14)
+    rf = font(SANSB, 13)
     for i, (name, count) in enumerate(REGION_COUNTS.items()):
         x0 = M + i * seg
         d.rectangle([x0, ry, x0 + seg, ry + rh], fill=REGIONS[name])
         d.text((x0 + seg / 2, ry + rh / 2), f"{name} {count}", font=rf,
                fill=REGION_TEXT[name], anchor="mm")
 
-    # field bar: black, white text, fitted
-    fy, fh = 132, 20
+    # field bar: black, white text, fitted (reference: y=117, height 17px)
+    fy, fh = 117, 17
     d.rectangle([M, fy, M + CW, fy + fh], fill=BAR_BLK)
     field_txt = "BY FIELD:  " + "  \u00b7  ".join(f"{n} {c}" for n, c in FIELD_COUNTS)
-    ff, fsize = fit_font(SANS, field_txt, CW - 12, 14)
+    ff, fsize = fit_font(SANS, field_txt, CW - 12, 12)
     log.append(f"field bar size {fsize}")
     d.text((M + 6, fy + fh / 2), field_txt, font=ff, fill=(255, 255, 255),
            anchor="lm")
 
     # day-in-numbers: date-stamped facts only, numbers in red
-    ny = 156
+    # reference: strip sits just below the field bar, ~12px type
+    ny = 137
     parts = [("THE DAY IN NUMBERS:  ", INK, True)]
     for i, (num, txt) in enumerate(NUMBERS):
         if i:
             parts.append(("  \u00b7  ", INK, False))
         parts.append((num + " ", RED, True))
         parts.append((txt, INK, False))
-    nf, nsize = fit_font(SANS, "".join(p[0] for p in parts), CW, 14)
+    nf, nsize = fit_font(SANS, "".join(p[0] for p in parts), CW, 12)
     nfb = font(SANSB, nsize)
     log.append(f"numbers strip size {nsize}")
     cx = M
@@ -695,24 +744,26 @@ def main():
         cx += f.getlength(txt)
 
     # lead cards: 3 big + 5 + 5 (ronigrv skeleton, own art)
+    # reference geometry: big y154 h212; small rows y372 / y527 h149
     big_w, gap = 328, 8
     for i, card in enumerate(LEADS[:3]):
-        draw_card(d, card, M + i * (big_w + gap), 178, big_w, 240, big=True)
+        draw_card(d, card, M + i * (big_w + gap), 154, big_w, 212, big=True)
     sm_w = (CW - 4 * gap) // 5
     for row, cards in enumerate((LEADS[3:8], LEADS[8:13])):
-        y0 = 422 + row * 184
+        y0 = 372 + row * 155
         for i, card in enumerate(cards):
-            draw_card(d, card, M + i * (sm_w + gap), y0, sm_w, 180, big=False)
+            draw_card(d, card, M + i * (sm_w + gap), y0, sm_w, 149, big=False)
 
-    # bottom: map left, briefs right
-    by = 790
-    tf = font(SANSB, 15)
+    # bottom: map left, briefs right (reference: headers y685, rule y699,
+    # map 300x148 from y704, legend ~y857)
+    by = 685
+    tf = font(SANSB, 14)
     d.text((M, by), "WHERE IT HAPPENED", font=tf, fill=INK)
     d.text((342, by), "ALSO ON THURSDAY 19 NOVEMBER", font=tf, fill=INK)
-    d.line([M, by + 20, M + CW, by + 20], fill=INK, width=1)
-    draw_map(d, M, by + 26, 300, 112)
+    d.line([M, by + 14, M + CW, by + 14], fill=INK, width=1)
+    draw_map(d, M, by + 19, 300, 148)
     # map legend
-    ly = by + 144
+    ly = by + 172
     lf = font(SANS, 11)
     lx = M
     for name in ("EUROPE", "MIDDLE EAST", "ASIA", "AFRICA", "AMERICAS", "WORLD"):
@@ -723,39 +774,40 @@ def main():
     d.text((M, ly + 14), "Pins = cards \u00b7 dots = briefs", font=lf, fill=(90, 90, 90))
 
     # briefs: 3 columns, one line each, bold lead-in + region bullet
+    # reference: cap 7px -> 10px type, ~13px line pitch
     bx0, bw = 342, 223
     cols = [[BRIEFS[0], BRIEFS[1], BRIEFS[2]],
             [BRIEFS[3], BRIEFS[4], BRIEFS[5]],
             [BRIEFS[6], BRIEFS[7]]]
     for ci, col in enumerate(cols):
         for ri, (n, lead, body, region) in enumerate(col):
-            yy = by + 34 + ri * 40
-            # fit: start at the 22/19 floor, shrink only if the line overflows
-            for lsz, bsz in ((22, 19), (20, 18), (18, 16)):
+            yy = by + 19 + ri * 14
+            # fit: start at 11/10, shrink only if the line overflows
+            for lsz, bsz in ((11, 10), (10, 10), (10, 9)):
                 lf2, bf2 = font(SANSB, lsz), font(SANS, bsz)
                 num_w = lf2.getlength(f"{n} ")
-                total = num_w + 12 + lf2.getlength(lead) + bf2.getlength(" " + body)
+                total = num_w + 9 + lf2.getlength(lead) + bf2.getlength(" " + body)
                 if total <= bw:
                     break
             else:
-                lsz, bsz = 18, 16
+                lsz, bsz = 10, 9
                 lf2, bf2 = font(SANSB, lsz), font(SANS, bsz)
-            if (lsz, bsz) != (22, 19):
+            if (lsz, bsz) != (11, 10):
                 log.append(f"brief {n} shrunk to {lsz}/{bsz}")
             xx = bx0 + ci * (bw + 10)
             d.text((xx, yy), f"{n} ", font=lf2, fill=INK)
             xx += lf2.getlength(f"{n} ")
-            d.rectangle([xx, yy + 5, xx + 9, yy + 14], fill=REGIONS[region])
-            xx += 12
+            d.rectangle([xx, yy + 2, xx + 6, yy + 8], fill=REGIONS[region])
+            xx += 9
             d.text((xx, yy), lead, font=lf2, fill=INK)
             xx += lf2.getlength(lead)
             d.text((xx, yy), " " + body, font=bf2, fill=(60, 60, 60))
 
-    # DATE CHECK: red border, prominent, short
-    dy, dh = 962, 36
+    # DATE CHECK: red border, prominent, short (reference: ~y970, 2 lines ~12px)
+    dy, dh = 966, 34
     d.rectangle([M, dy, M + CW, dy + dh], outline=RED, width=2)
-    df = font(SANS, 14)
-    dfb = font(SANSB, 14)
+    df = font(SANS, 12)
+    dfb = font(SANSB, 12)
     label = "DATE CHECK \u2014 "
     d.text((M + 8, dy + dh / 2), label, font=dfb, fill=RED, anchor="lm")
     rest = DATE_CHECK
@@ -765,10 +817,11 @@ def main():
                fill=INK)
     log.append(f"date-check lines {len(lines)}")
 
-    # footer
-    ff2, f2size = fit_font(SANS, FOOTER, CW, 13)
+    # footer (reference: full-width rule at y=1004, text ~y1010, ~12px)
+    d.line([M, 1004, M + CW, 1004], fill=INK, width=1)
+    ff2, f2size = fit_font(SANS, FOOTER, CW, 12)
     log.append(f"footer size {f2size}")
-    d.text((W // 2, 1006), FOOTER, font=ff2, fill=(60, 60, 60), anchor="ma")
+    d.text((W // 2, 1010), FOOTER, font=ff2, fill=(60, 60, 60), anchor="ma")
 
     # contrast audit (better-colors: measure, don't estimate)
     for name, col in REGIONS.items():
