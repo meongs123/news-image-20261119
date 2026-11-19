@@ -211,9 +211,11 @@ def ill_nvidia(d, x, y, w, h):
             d.rectangle([px, py, px + pw, py + ph], fill=(160, 160, 160))
     d.rectangle([cx0 + 12, cy0 + 12, cx0 + cw - 12, cy0 + cw - 12],
                 fill=(24, 68, 32))
-    for tx in (cx0 + 18, cx0 + 30, cx0 + 42):  # circuit traces on the die
-        d.line([tx, cy0 + 14, tx, cy0 + cw - 14], fill=(118, 185, 0), width=2)
-        d.line([cx0 + 14, tx, cx0 + cw - 14, tx], fill=(118, 185, 0), width=2)
+    for off in (18, 30, 42):  # circuit traces on the die
+        d.line([cx0 + off, cy0 + 14, cx0 + off, cy0 + cw - 14],
+               fill=(118, 185, 0), width=2)
+        d.line([cx0 + 14, cy0 + off, cx0 + cw - 14, cy0 + off],
+               fill=(118, 185, 0), width=2)
     d.ellipse([cx0 + 22, cy0 + 22, cx0 + 36, cy0 + 36], fill=(118, 185, 0))
     # handshake figures, centre: outgoing chief (left, dark suit) meets the
     # successor (right, green tie); hands meet over a small table
